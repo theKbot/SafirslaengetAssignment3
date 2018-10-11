@@ -1,9 +1,11 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Server
 {
@@ -35,7 +37,6 @@ namespace Server
             if (!strm.DataAvailable)
             {
                 Console.WriteLine("OOOPS MOFO");
-                return;
             }
             var readCnt = strm.Read(buffer, 0, buffer.Length);
             var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
@@ -56,6 +57,7 @@ namespace Server
             }
             else
             {
+                //Illegal method
                 foreach (string a in allowedMethods)
                 {
                     if (r.Method != a)
@@ -64,6 +66,55 @@ namespace Server
                     }
                 }
             }
+
+            //Missing resource
+            if (r.Path == null && r.Method != "echo")
+            {
+                AddToStatus(res, "Missing resource");
+            }
+            else
+            {
+                if (!File.Exists(r.Path))
+                {
+                    AddToStatus(res, "Invaild Path");
+                }
+            }
+
+            //Missing date
+            if(r.Date == null)
+            {
+                AddToStatus(res, "Missing date");
+            }
+            else
+            {
+                if (!int.TryParse(r.Date, out int e))
+                {
+                    AddToStatus(res, "Illegal date");
+                }
+            }
+
+            //Missing body
+            if (r.Body == null && (r.Method == "create" || r.Method == "update" || r.Method == "Echo"))
+            {
+                AddToStatus(res, "Missing body");
+            }
+            else
+            {
+                try
+                {
+                    var tmpJson = JObject.Parse(r.Body);
+                }
+                catch(Exception e)
+                {
+                    AddToStatus(res, "Illegal body");
+                }
+            }
+            
+            if(res.Status == null)
+            {
+
+            }
+            
             return null;
         }
         static void CreateStream(TcpClient client)
