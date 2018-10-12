@@ -541,7 +541,7 @@ namespace Assignment3TestSuite
 
             client.SendRequest(request.ToJson());
             var response = client.ReadResponse();
-
+            
             client = Connect();
             var verifyRequest = new
             {

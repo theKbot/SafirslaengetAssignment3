@@ -11,7 +11,7 @@ namespace Server
 {
     class Server
     {
-        static String[] allowedMethods = { "create", "read", "update", "delete", "echo" };
+        static readonly String[] allowedMethods = { "create", "read", "update", "delete", "echo" };
         static void Main(string[] args)
         {
             //server
@@ -21,11 +21,31 @@ namespace Server
 
             while(true)
             {
+                Console.WriteLine("Waiting for client");
                 var client = server.AcceptTcpClient();
-
                 Console.WriteLine("Client found! :D");
-
-                HandleRequest(client);
+                var strm = client.GetStream();
+                var buffer = new Byte[client.ReceiveBufferSize];
+                try
+                {
+                    var readCnt = strm.Read(buffer, 0, buffer.Length);
+                    var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
+                    Request req = JsonConvert.DeserializeObject<Request>(msg);
+                    Response res = CheckConstraints(req);
+                    if (res.Status != null)
+                    {
+                        client.SendResponse(res);
+                    }
+                }
+                catch (IOException) { }
+                catch (NullReferenceException)
+                {
+                    Response r = new Response()
+                    {
+                        Status = "4 Missing method"
+                    };
+                    client.SendResponse(r);
+                }
             } 
         }
 
@@ -33,68 +53,97 @@ namespace Server
         {
             var strm = client.GetStream();
             var buffer = new Byte[client.ReceiveBufferSize];
-            //Only process request if any (constraint)
-            if (!strm.DataAvailable)
+            //Catch fejl, og send en response tilbage
+            try
             {
-                Console.WriteLine("OOOPS MOFO");
+                Console.WriteLine("Trying");
+                var readCnt = strm.Read(buffer, 0, buffer.Length);
+                var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
+                Request req = JsonConvert.DeserializeObject<Request>(msg);
+                Response res = CheckConstraints(req);
+                
+
+                if(res.Status != null)
+                {
+                    client.SendResponse(res);
+                    return;
+                }
             }
-            var readCnt = strm.Read(buffer, 0, buffer.Length);
-            var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
-            
-            Request r = JsonConvert.DeserializeObject<Request>(msg);
-            Response res = CheckConstraints(r);
-            
+            catch (NullReferenceException)
+            {
+                Console.WriteLine("catch null error");
+                Response r = new Response()
+                {
+                    Status = "Missing method"
+                };
+                client.SendResponse(r);
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine("catch: "+e);
+                return;
+            }
         }
 
-        static Response CheckConstraints(Request r)
+        static Response CheckConstraints(Request req)
         {
             Response res = new Response();
                 /*  CONSTRAINTS  */
             //Missing method
-            if(r.Method == null)
+            if(req.Method == null)
             {
                 AddToStatus(res, "Missing method!");
             }
-            else
+            else 
             {
                 //Illegal method
+                //TODO: This is shit code!!! FIX
                 foreach (string a in allowedMethods)
                 {
-                    if (r.Method != a)
+                    if (req.Method == a)
                     {
-                        AddToStatus(res, "Illegal Method");
+                        goto Match;
                     }
                 }
+                AddToStatus(res, "Illegal Method");
+                
+            Match:
+                Console.WriteLine();
             }
 
             //Missing resource
-            if (r.Path == null && r.Method != "echo")
+            if (req.Path == null && req.Method != "echo")
             {
                 AddToStatus(res, "Missing resource");
             }
-            else
+            //Vi skal kun kigge på der er en path, men vi skal ikke tjekke om det er en lovlig path, det er først 
+            //når vi udfører requesten at vi skal tjekke path ???
+            /*
             {
-                if (!File.Exists(r.Path))
+                if (!File.Exists(req.Path))
                 {
-                    AddToStatus(res, "Invaild Path");
+                    //bad request
+                    res.Status = "4 Bad Request";
+                    Console.WriteLine("ip");
+                    return res;
                 }
             }
-
+            */
             //Missing date
-            if(r.Date == null)
+            if(req.Date == null)
             {
                 AddToStatus(res, "Missing date");
             }
             else
             {
-                if (!int.TryParse(r.Date, out int e))
+                if (!int.TryParse(req.Date, out int e))
                 {
                     AddToStatus(res, "Illegal date");
                 }
             }
 
             //Missing body
-            if (r.Body == null && (r.Method == "create" || r.Method == "update" || r.Method == "Echo"))
+            if (req.Body == null && (req.Method == "create" || req.Method == "update" || req.Method == "echo"))
             {
                 AddToStatus(res, "Missing body");
             }
@@ -102,26 +151,27 @@ namespace Server
             {
                 try
                 {
-                    var tmpJson = JObject.Parse(r.Body);
+                    var tmpJson = JObject.Parse(req.Body);
                 }
-                catch(Exception e)
+                catch(Exception)
                 {
                     AddToStatus(res, "Illegal body");
                 }
             }
             
-            if(res.Status == null)
+            //Missing unix time
+            if (!int.TryParse(req.Date, out int e_m))
             {
-
+                AddToStatus(res, "Illegal date");
             }
-            
-            return null;
+            if(res.Status != null)
+            {
+                res.Status = res.Status.Insert(0, "4 ");
+            }
+            return res;
         }
-        static void CreateStream(TcpClient client)
-        {
 
-        }
-
+        //This funtion adds a message to the Response object's status
         static void AddToStatus(Response r, string message)
         {
             if (r.Status == null)
@@ -132,6 +182,24 @@ namespace Server
             {
                 r.Status += ", " + message;
             }
+        }
+
+
+        //For converting the datetime to unix
+        private static string UnixTimestamp()
+        {
+            return DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
+        }
+    }
+
+    static class Util
+    {
+        public static void SendResponse(this TcpClient client, Response r)
+        {
+            var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(r));
+            client.GetStream().Write(payload, 0, payload.Length);
+            client.GetStream().Close();
+            client.Close();
         }
     }
 
