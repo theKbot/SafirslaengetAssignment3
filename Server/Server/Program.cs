@@ -14,6 +14,9 @@ namespace Server
         static readonly String[] allowedMethods = { "create", "read", "update", "delete", "echo" };
         static void Main(string[] args)
         {
+            //Create data object
+            Category[] data = CreateData();
+
             //server
             var server = new TcpListener(IPAddress.Parse("127.0.0.1"), 5000);
             server.Start();
@@ -31,7 +34,7 @@ namespace Server
                     var readCnt = strm.Read(buffer, 0, buffer.Length);
                     var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
                     Request req = JsonConvert.DeserializeObject<Request>(msg);
-                    Response res = CheckConstraints(req);
+                    Response res = CheckConstraints(req, client);
                     if (res.Status != null)
                     {
                         client.SendResponse(res);
@@ -60,7 +63,7 @@ namespace Server
                 var readCnt = strm.Read(buffer, 0, buffer.Length);
                 var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
                 Request req = JsonConvert.DeserializeObject<Request>(msg);
-                Response res = CheckConstraints(req);
+                Response res = CheckConstraints(req, client);
                 
 
                 if(res.Status != null)
@@ -85,7 +88,7 @@ namespace Server
             }
         }
 
-        static Response CheckConstraints(Request req)
+        static Response CheckConstraints(Request req, TcpClient client)
         {
             Response res = new Response();
                 /*  CONSTRAINTS  */
@@ -168,9 +171,18 @@ namespace Server
             {
                 res.Status = res.Status.Insert(0, "4 ");
             }
+
+            //Echo "Hello world
+            if (req.Method == "echo")
+            {
+                string message = req.Body;
+                AddToBody(res, "Hello World");
+                client.SendResponse(res);
+            }
             return res;
         }
 
+     
         //This funtion adds a message to the Response object's status
         static void AddToStatus(Response r, string message)
         {
@@ -184,11 +196,36 @@ namespace Server
             }
         }
 
+        static void AddToBody(Response r, string message)
+        {
+            if (r.Body == null)
+            {
+                r.Body += message;
+            }
+            else
+            {
+                r.Body += ", " + message;
+            }
+        }
+
 
         //For converting the datetime to unix
         private static string UnixTimestamp()
         {
             return DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
+        }
+
+        //This function creates the data used
+        static Category[] CreateData()
+        {
+            var d = new Category[]
+            {
+                new Category{Cid = "1", Name = "Beverages"},
+                new Category{Cid = "2", Name = "Condiments"},
+                new Category{Cid = "3", Name = "Confections"}
+            };
+            //Returning the D
+            return d;
         }
     }
 
@@ -217,7 +254,7 @@ namespace Server
     }
     class Category
     {
-        string Cid { get; set; }
-        string Name { get; set; }
+        public string Cid { get; set; }
+        public string Name { get; set; }
     }
 }
