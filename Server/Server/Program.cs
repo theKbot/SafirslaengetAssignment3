@@ -22,11 +22,11 @@ namespace Server
             var server = new TcpListener(IPAddress.Parse("127.0.0.1"), 5000);
             server.Start();
             Console.WriteLine("Server started ..");
-            Console.WriteLine("test");
             while(true)
             {
                 Console.WriteLine("Waiting for client");
-                var client = server.AcceptTcpClient();
+                var client = server.AcceptTcpClientAsync();
+
                 var strm = client.GetStream();
                 var buffer = new Byte[client.ReceiveBufferSize];
                 try
