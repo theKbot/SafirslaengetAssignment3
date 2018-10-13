@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -16,46 +17,57 @@ namespace Server
         //Create data object
         static List<Category> Data = CreateData();
         static readonly String[] allowedMethods = { "create", "read", "update", "delete", "echo" };
+        static TcpListener server = new TcpListener(IPAddress.Parse("127.0.0.1"), 5000);
         static void Main(string[] args)
         {
             //server
-            var server = new TcpListener(IPAddress.Parse("127.0.0.1"), 5000);
-            server.Start();
+                        server.Start();
             Console.WriteLine("Server started ..");
-            while(true)
+            StartServerLoop();
+        }
+
+        static async Task StartServerLoop()
+        {
+            while (true)
             {
                 Console.WriteLine("Waiting for client");
-                var client = server.AcceptTcpClientAsync();
+                var client = server.AcceptTcpClient();
+                await CreateThread(client);
+            }
+        }
 
-                var strm = client.GetStream();
-                var buffer = new Byte[client.ReceiveBufferSize];
-                try
+        static async Task CreateThread(TcpClient client)
+        {
+            Response res = new Response();
+            var strm = client.GetStream();
+            var buffer = new Byte[client.ReceiveBufferSize];
+            try
+            {
+                var readCnt = strm.Read(buffer, 0, buffer.Length);
+                var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
+                Request req = JsonConvert.DeserializeObject<Request>(msg);
+                res = CheckConstraints(req, client);
+                if (res.Status != null)
                 {
-                    var readCnt = strm.Read(buffer, 0, buffer.Length);
-                    var msg = Encoding.UTF8.GetString(buffer, 0, readCnt);
-                    Request req = JsonConvert.DeserializeObject<Request>(msg);
-                    Response res = CheckConstraints(req, client);
-                    if (res.Status != null)
-                    {
-                        client.SendResponse(res);
-                    }
-                    else
-                    {
-                        res = HandleRequest(req, client);
-                        client.SendResponse(res);
-                    }
-                    
+                    client.SendResponse(res);
                 }
-                catch (IOException) { }
-                catch (NullReferenceException)
+                else
                 {
-                    Response r = new Response()
-                    {
-                        Status = "4 Missing method"
-                    };
-                    client.SendResponse(r);
+                    res = HandleRequest(req, client);
+                    client.SendResponse(res);
                 }
-            } 
+
+            }
+            catch (IOException) { }
+            catch (NullReferenceException)
+            {
+                Response r = new Response()
+                {
+                    Status = "4 Missing method"
+                };
+                client.SendResponse(r);
+            }
+
         }
 
         static Response CheckConstraints(Request req, TcpClient client)
