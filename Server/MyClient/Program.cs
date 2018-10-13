@@ -17,10 +17,9 @@ namespace MyClient
 
             var jsonobject = new
             {
-                method = "update",
-                path = "/ api / categories / 1",
-                date = "06 - 10 - 2017 19:41:09",
-                body = "{ cid: 1, name: \"NewName\"}"
+                method = "read",
+                path = "/api/categories/1",
+                date = DateTimeOffset.Now.ToUnixTimeSeconds().ToString()
             };
 
             var strm = client.GetStream();
