@@ -13,18 +13,16 @@ namespace Server
 {
     class Server
     {
+        //Create data object
         static List<Category> Data = CreateData();
         static readonly String[] allowedMethods = { "create", "read", "update", "delete", "echo" };
         static void Main(string[] args)
         {
-            //Create data object
-            
-
             //server
             var server = new TcpListener(IPAddress.Parse("127.0.0.1"), 5000);
             server.Start();
             Console.WriteLine("Server started ..");
-
+            Console.WriteLine("test");
             while(true)
             {
                 Console.WriteLine("Waiting for client");
